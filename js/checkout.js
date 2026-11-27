@@ -23,11 +23,20 @@ function deliveryFees() {
   return (live && typeof live === 'object') ? live : DELIVERY_FEE;
 }
 /* A product's own amount wins over its category's. 0 is free delivery for that
-   product, so the test is for a number, not for truthiness. */
+   product, so the test is for a number, not for truthiness.
+
+   Read from the live catalogue, not the cart line: the line is a copy of the
+   product taken when it was added and kept in localStorage, so an amount the
+   owner changed or cleared since would otherwise linger in the summary while
+   price_order charges the current one. The line is only the fallback, for a
+   product deleted after it went into the cart — as on the server. */
 function itemDeliveryFee(item) {
-  const own = item && item.delivery_fee;
+  const live = (typeof PRODUCTS !== 'undefined' && item)
+    ? PRODUCTS.find(p => p.id === item.id) : null;
+  const src = live || item || {};
+  const own = src.delivery_fee;
   if (own !== undefined && own !== null && own !== '' && !isNaN(own)) return Number(own);
-  return deliveryFees()[((item && item.category) || '').toLowerCase()] || 0;
+  return deliveryFees()[(src.category || '').toLowerCase()] || 0;
 }
 function getDeliveryMethod() {
   const el = document.getElementById('co-delivery-method');

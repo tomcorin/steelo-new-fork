@@ -1460,6 +1460,10 @@ def rewrite_sold_out(html, product):
 _LI_FEE_RE = _re.compile(
     r'(<li\b[^>]*\bdata-stl-cat="([^"]*)"[^>]*>)(.*?)(</li>)', _re.S)
 _FEE_SPAN_RE = _re.compile(r'(<span\b[^>]*\bdata-stl-fee[^>]*>)(.*?)(</span>)', _re.S)
+# How build.py's delivery_section() marks the row for the page's own category.
+_ACTIVE_ROW_STYLE = 'font-weight:600;color:var(--ink);'
+_IDLE_ROW_STYLE   = 'color:var(--ink-500);'
+_ROW_TICK         = ' <span style="color:var(--ink-400);">✓</span>'
 
 
 def stocked_categories():
@@ -1562,6 +1566,7 @@ def rewrite_delivery_fees(html, product):
     """
     fees    = delivery_fees()
     stocked = stocked_categories()
+    own     = _clean_fee((product or {}).get('delivery_fee'))
 
     def one_row(m):
         open_tag, cat_attr, body, close = m.groups()
@@ -1570,14 +1575,20 @@ def rewrite_delivery_fees(html, product):
             return m.group(0)
         text = _fee_text(keys, fees, stocked)
         body = _FEE_SPAN_RE.sub(lambda f: f.group(1) + text + f.group(3), body, count=1)
+        if own is not None:
+            # build.py ticks this product's category row. With an amount of its
+            # own, that row is not what this visitor pays, and two ticked prices
+            # side by side read as a contradiction — only the own row keeps it.
+            open_tag = open_tag.replace(_ACTIVE_ROW_STYLE, _IDLE_ROW_STYLE)
+            body     = body.replace(_ROW_TICK, '')
         return open_tag + body + close
 
     html = _LI_FEE_RE.sub(one_row, html)
 
-    own = _clean_fee((product or {}).get('delivery_fee'))
     if own is not None:
         row = ('<li style="font-weight:600;color:var(--ink);padding:0.3rem 0;">'
-               'משלוח לפריט זה — <span dir="ltr">₪' + str(own) + '</span>'
+               'משלוח לפריט זה — '
+               + ('חינם' if own == 0 else '<span dir="ltr">₪' + str(own) + '</span>') +
                ' <span style="color:var(--ink-400);">✓</span></li>')
         html = html.replace('<ul data-stl-delivery>',
                             '<ul data-stl-delivery>' + row, 1)
